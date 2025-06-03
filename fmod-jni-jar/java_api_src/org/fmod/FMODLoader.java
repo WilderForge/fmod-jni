@@ -100,6 +100,8 @@ public class FMODLoader {
 	private static boolean loadLibrary(String sharedLibName) {
 		if (sharedLibName == null) return false;
 
+		String sourceCrc = crc(FMODLoader.class.getResourceAsStream(sharedLibName));
+
 		File file;
 		Throwable ex = null;
 		ByteBuffer libBytes;
@@ -179,42 +181,25 @@ public class FMODLoader {
 	}
 
 	/**
-	 * Returns a CRC of the remaining bytes in the buffer.
-	 *
-	 * The input buffer will remain unchanged.
+	 * Returns a CRC of the remaining bytes in the stream.
 	 */
-	public static String crc(ByteBuffer input) {
+	public static String crc(InputStream input) {
 		if (input == null) return "" + System.nanoTime(); // fallback
 		CRC32 crc = new CRC32();
-
-		ByteBuffer buf = input.slice(); //so we don't modify the underlying buffer
-		byte[] temp = new byte[4096];
-		while (buf.hasRemaining()) {
-			int length = Math.min(buf.remaining(), temp.length);
-			buf.get(temp, 0, length);
-			crc.update(temp, 0, length);
-		}
-
-		return Long.toString(crc.getValue());
-	}
-
-	private static ByteBuffer getLibBytes(InputStream stream) {
-		if (stream == null) throw new NullPointerException("Resource stream is null");
-		final int bufferSize = 4096; //4kb buffer
-		byte[] buffer = new byte[bufferSize];
-		ByteArrayOutputStream out = new ByteArrayOutputStream();
-
-		int bytesRead;
+		byte[] buffer = new byte[4096];
 		try {
-			while ((bytesRead = stream.read(buffer)) != -1) {
-				out.write(buffer, 0, bytesRead);
+			while (true) {
+				int length = input.read(buffer);
+				if (length == -1) break;
+				crc.update(buffer, 0, length);
+			}
+		} catch (Exception ex) {
+			try {
+				input.close();
+			} catch (Exception ignored) {
 			}
 		}
-		catch(IOException e) {
-			throw new RuntimeException(e);
-		}
-
-		return ByteBuffer.wrap(out.toByteArray());
+		return Long.toString(crc.getValue());
 	}
 
 	private static ByteBuffer getPatchedLibBytes(InputStream stream) {
@@ -259,6 +244,7 @@ public class FMODLoader {
 			} catch (IOException ex) {
 				throw new RuntimeException(ex);
 			} finally {
+				closeQuietly(input);
 				closeQuietly(output);
 			}
 	}
